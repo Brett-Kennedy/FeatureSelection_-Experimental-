@@ -4,8 +4,8 @@ import copy
 from sklearn.base import clone
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import f1_score
-# import shap
-from tqdm import  tqdm
+import shap
+from tqdm import tqdm
 from IPython import get_ipython
 from IPython.display import display, clear_output, Markdown
 import matplotlib.pyplot as plt
@@ -60,25 +60,44 @@ def __plot_bootstraps(model_in, x_train, y_train, x_val, y_val, sorted_col_names
     num_cols_arr = []
     training_scores = []
     val_scores = []
+    summary_arr = []
     for num_cols_used in tqdm(range(1, len(sorted_col_names) + 1)):
         model = clone(model_in)
         col_names = sorted_col_names[:num_cols_used]
         model.fit(x_train[col_names], y_train)
+        inner_training_scores = []
+        inner_val_scores = []
         for i in range(num_bootstraps):
             num_cols_arr.append(num_cols_used)
 
             x_train_sample = x_train.sample(n=len(x_train), replace=True, random_state=num_cols_used*1000+i)
             y_pred_train = model.predict(x_train_sample[col_names])
-            training_scores.append(metric(np.array(y_train)[x_train_sample.index.values], y_pred_train, **kwargs))
+            score = metric(np.array(y_train)[x_train_sample.index.values], y_pred_train, **kwargs)
+            training_scores.append(score)
+            inner_training_scores.append(score)
 
             x_val_sample = x_val.sample(n=len(x_val), replace=True, random_state=num_cols_used*1000+i)
             y_pred_val = model.predict(x_val_sample[col_names])
-            val_scores.append(metric(np.array(y_val)[x_val_sample.index.values], y_pred_val, **kwargs))
+            score = metric(np.array(y_val)[x_val_sample.index.values], y_pred_val, **kwargs)
+            val_scores.append(score)
+            inner_val_scores.append(score)
+        summary_arr.append([num_cols_used,
+                            np.mean(inner_training_scores), np.std(inner_training_scores),
+                            np.mean(inner_val_scores), np.std(inner_val_scores),
+                            ", ".join(sorted_col_names[:num_cols_used])])
+
+    summary_df = pd.DataFrame(summary_arr, columns=['Number Features', 'Mean Training Score', "Std Dev Training Score",
+                                                    "Mean Validation Score", "Std Dev Validation Score", "Features"])
 
     sns.lineplot(x=num_cols_arr, y=training_scores, label='Training Scores')
     sns.lineplot(x=num_cols_arr, y=val_scores, label="Validation Scores")
     plt.title(f"Train and Validation Scores \nover {num_bootstraps} Boostrap Samples for each Number of Features")
     plt.show()
+
+    if is_notebook():
+        display(summary_df)
+    else:
+        print(summary_df)
 
 
 def feature_selection_filter(model_in, x_train, y_train, x_val, y_val, draw_plots, metric, **kwargs):
@@ -87,8 +106,8 @@ def feature_selection_filter(model_in, x_train, y_train, x_val, y_val, draw_plot
     """
 
     res = []
-    for col_name in x_train.columns:
-        model = clone(model_in)
+    for col_name in tqdm(x_train.columns):
+        model = DecisionTreeClassifier()
         model.fit(x_train[[col_name]], y_train)
         y_pred_train = model.predict(x_train[[col_name]])
         y_pred_val = model.predict(x_val[[col_name]])
@@ -129,7 +148,7 @@ def feature_selection_filter(model_in, x_train, y_train, x_val, y_val, draw_plot
 def feature_selection_pairs(model_in, x_train, y_train, x_val, y_val, draw_plots, metric, **kwargs):
     res = []
     scores_matrix = np.zeros((len(x_train.columns), len(x_train.columns)))
-    for col_0_idx, col_0_name in enumerate(x_train.columns):
+    for col_0_idx, col_0_name in tqdm(enumerate(x_train.columns)):
         for col_1_idx in range(col_0_idx+1, len(x_train.columns)):
             col_1_name = x_train.columns[col_1_idx]
             model = clone(model_in)
@@ -168,7 +187,7 @@ def feature_selection_pairs(model_in, x_train, y_train, x_val, y_val, draw_plots
     return res_df
 
 
-def feature_selection_forward_wrapper(model_in, x_train, y_train, x_val, y_val, draw_plots, metric, **kwargs):
+def feature_selection_forward_wrapper(model_in, x_train, y_train, x_val, y_val, max_features, draw_plots, metric, **kwargs):
     """
     We first find the best single feature to use. Then, we try each other feature in combination with that, and select
     the best feature to use in combination with the one already selecte. We then find the next best one to add and so
@@ -197,7 +216,7 @@ def feature_selection_forward_wrapper(model_in, x_train, y_train, x_val, y_val, 
     current_feature_set = [best_feature]
 
     # Loop through the rest of the features, adding one at a time
-    for i in range(1, num_feats):
+    for i in tqdm(range(1, max_features+1)):
         best_feature = None
         best_score = -np.inf
         for col_name in x_train.columns:
@@ -243,23 +262,147 @@ def feature_selection_embedded(model_in, x_train, y_train, x_val, y_val, draw_pl
     it may reduce BigQuery costs), but will not tend to increase the accuracy.
     """
 
+    x_train.columns = [str(x) for x in x_train.columns]
+
     model = clone(model_in)
     model.fit(x_train, y_train)
-    y_pred_train = model.predict(x_train)
-    # explainer = shap.TreeExplainer(model)
-    # shap_values = explainer(x_train)
-    shap_values = []
+    explainer = shap.TreeExplainer(model, x_train)
+    shap_values = explainer(x_train)
+
+    shap_df = pd.DataFrame(shap_values.values)
+    shap_df = shap_df.abs()
+
+    res_df = pd.DataFrame({"Feature Name": shap_df.mean().index, "Importance": shap_df.mean()})
+    res_df = res_df.sort_values(by='Importance', ascending=False)
+    display(res_df)
+
+    if draw_plots:
+        if is_notebook():
+            shap.initjs()
+        sns.barplot(orient='h', y=res_df['Feature Name'], x=res_df['Importance'], order=res_df['Feature Name'])
+        plt.show()
+
+        sorted_col_names = res_df['Feature Name']
+        __plot_bootstraps(model_in, x_train, y_train, x_val, y_val, sorted_col_names, metric, **kwargs)
+
+    return res_df
 
 
-def feature_selection_SHAP(model_in, x_train, y_train, x_val, y_val, draw_plots, metric, **kwargs):
+def feature_selection_SHAP(model_in, x_train, y_train, x_val, y_val, num_candidates, max_features, draw_plots, metric, **kwargs):
     """
     This uses SHAP values to estimate the skill of a model using various subsets of the features. These are then each
     evaluated.
     """
-    pass
+
+    def estimate_candidate(col_names):
+        """
+        Estimate the skill of a model using the SHAP values. Using these we can
+        estimate what the model would predict for a given set of features for
+        each row in the dataset, and can estimate the specified metric based on
+        this.
+        """
+        pred = np.zeros(len(x_train))
+        for col_name in col_names:
+            pred = pred + shap_df[col_name]
+        pred += base_value
+        pred = pred > 0.0
+        return f1_score(y_train, pred, average='macro')
+
+    def evaluate_candidate(col_names):
+        """
+        In this function we actually train the model using the specified features
+        and evaluate it using the specified metric.
+        """
+        model = clone(model_in)
+        model.fit(x_train[col_names], y_train)
+        y_pred_val = model.predict(x_val[col_names])
+        score = metric(y_val, y_pred_val, **kwargs)
+        return score
+
+    x_train.columns = [str(x) for x in x_train.columns]
+
+    print("Calculating SHAP values:")
+    model = clone(model_in)
+    model.fit(x_train, y_train)
+    explainer = shap.TreeExplainer(model, x_train)
+    shap_values = explainer(x_train)
+    base_value = shap_values.base_values[0]
+    shap_df = pd.DataFrame(shap_values.values)
+    shap_df.columns = x_train.columns
+
+    candidates_dict = {}
+    current_features = []
+
+    # Find the first feature to add
+    print("\nIdentifying a set of cadidate sets of features based on the SHAP values:")
+    best_feature = None
+    best_score = -np.inf
+    for col_name in x_train.columns:
+        score = estimate_candidate([col_name])
+        if score > best_score:
+            best_feature = col_name
+            best_score = score
+
+    current_feature_set = [best_feature]
+
+    # Loop 10 times, each time going through several passes of adding and
+    # removing features
+    for _ in tqdm(range(10)):
+        best_feature = None
+        best_score = -np.inf
+
+        # Find the best feature to add up to 10 times before moving to
+        # potentially removing features
+        for _ in range(10):
+            best_feature = None
+            best_score = -np.inf
+            for col_name in x_train.columns:
+                if col_name in current_feature_set:
+                    continue
+                dict_key = tuple(sorted(current_feature_set + [col_name]))
+                if dict_key in candidates_dict:
+                    continue
+                score = estimate_candidate(current_feature_set + [col_name])
+                if score > best_score:
+                    best_feature = col_name
+                    best_score = score
+            if best_feature:
+                current_feature_set.append(best_feature)
+                if len(current_feature_set) <= max_features:
+                    # print(f"Adding {best_feature=}, {best_score=}")
+                    candidates_dict[dict_key] = best_score
+
+        # Find the best feature to remove up to 10 times before moving back to
+        # potentially adding features
+        for _ in range(10):
+            best_set = None
+            for col_name in current_feature_set:
+                candidate_set = current_feature_set.copy()
+                candidate_set.remove(col_name)
+                dict_key = tuple(sorted(candidate_set))
+                if dict_key in candidates_dict:
+                    continue
+                score = estimate_candidate(candidate_set)
+                if score >= best_score:
+                    best_set = candidate_set.copy()
+                    best_score = score
+            if best_set:
+                current_feature_set = best_set.copy()
+                if len(current_feature_set) < max_features:
+                    candidates_dict[tuple(sorted(current_feature_set))] = best_score
+
+    print("\nEvaluating the candidate sets:")
+    candidates_tested = sorted([x for x in zip(candidates_dict.keys(), candidates_dict.values())], key=lambda x: x[1], reverse=True)[:num_candidates]
+    res = []
+    for candidate in tqdm(candidates_tested):
+        res.append(evaluate_candidate(list(candidate[0])))
+    res_df = pd.DataFrame({'Candidate': [x[0] for x in candidates_tested], 'Score': res})
+    res_df = res_df.sort_values(by='Score', ascending=False)
+    display(res_df)
+    return res_df
 
 
-def feature_selection_Permutation(model_in, x_train, y_train, x_val, y_val, draw_plots, metric, **kwargs):
+def feature_selection_permutation(model_in, x_train, y_train, x_val, y_val, draw_plots, metric, **kwargs):
     """
     There are different variations on this test; this implements a quick and simple version. It trains a model on the
     full set of features and then determines how greatly the accuracy of the model drops by effectively removing (by
@@ -305,8 +448,10 @@ def feature_selection_Permutation(model_in, x_train, y_train, x_val, y_val, draw
         sorted_col_names = res_df['Features']
         __plot_bootstraps(model_in, x_train, y_train, x_val, y_val, sorted_col_names, metric, **kwargs)
 
+    return res_df
 
-def feature_selection_Boruta(model_in, x_train, y_train, x_val, y_val, draw_plots, metric, **kwargs):
+
+def feature_selection_boruta(model_in, x_train, y_train, x_val, y_val, draw_plots, metric, **kwargs):
     """
     We create a set of shadow features (which are scrambled versions of the original features), one for each original
     feature. We then train a model on all features, the original and the shadow features. We take the maximum importance
@@ -339,7 +484,7 @@ def feature_selection_Boruta(model_in, x_train, y_train, x_val, y_val, draw_plot
     res_df = pd.DataFrame({"Feature": x_train_boruta.columns})
     res_df['Is Shadow'] = res_df['Feature'].str.contains("shadow")
     iteration_features = []
-    for iteration_idx in range(n_iterations):
+    for iteration_idx in tqdm(range(n_iterations)):
         np.random.seed(iteration_idx)
         x_train, x_train_shadow, x_train_boruta = create_boruta_df(x_train)
 
@@ -373,6 +518,10 @@ def feature_selection_Boruta(model_in, x_train, y_train, x_val, y_val, draw_plot
     if draw_plots:
         msg = ("Vertical line shows the maximum importance assigned to any shadow feature, which is used as the cutoff "
                "to determine predictive features")
+        if is_notebook():
+            display(Markdown(f'{msg}'))
+        else:
+            print(msg)
         s = sns.barplot(orient='h', y=res_df['Feature'], x=res_df['Average Importance'], hue=res_df['Is Shadow'])
         s.axvline(res_df[res_df['Is Shadow']]['Average Importance'].max())
         plt.title("Average Feature Importance over 20 iterations for all actual and shadow features")
@@ -386,6 +535,8 @@ def feature_selection_Boruta(model_in, x_train, y_train, x_val, y_val, draw_plot
         res_df = res_df.sort_values(['Hit %'], ascending=False)
         sorted_col_names = res_df['Feature']
         __plot_bootstraps(model_in, x_train_boruta, y_train, x_val_boruta, y_val, sorted_col_names, metric, **kwargs)
+
+    return res_df
 
 
 def feature_selection_genetic(model_in, x_train, y_train, x_val, y_val, num_iterations, num_feats_selected, draw_plots,
@@ -527,28 +678,37 @@ def is_notebook():
 
 
 if __name__ == "__main__":
+    pd.set_option('display.width', 32000)
+    pd.set_option('display.max_columns', 3000)
+    pd.set_option('display.max_colwidth', 3000)
+    pd.set_option('display.max_rows', 5000)
+
+    n_rows = 1_000
+    n_cols = 14  # todo: test with about 100
+    num_relevant_cols = 6
+    frac_pos = 0.05
+
     def generate_data():
         def gen_target_col(df):
             sum = np.array([0]*len(df))
             for col_idx, col_name in enumerate(df.columns[:num_relevant_cols]):
                 sum = sum + ((len(df.columns) - col_idx) * df[col_name])
-            ret = [x > np.median(sum) for x in sum]
+            ret = [x < np.quantile(sum, frac_pos) for x in sum]
 
-            # Add random noise
-            modified_idxs = np.random.choice(range(n_rows), n_rows//20)
-            for i in modified_idxs:
-                ret[i] = False if ret[i] else True
+            # # Add random noise
+            # modified_idxs = np.random.choice(range(n_rows), n_rows//20)
+            # for i in modified_idxs:
+            #     ret[i] = False if ret[i] else True
 
             return ret
-
-        n_rows = 500
-        n_cols = 14  # todo: test with about 100
-        num_relevant_cols = 6
 
         x_train = pd.DataFrame({x: np.random.rand(n_rows) for x in range(n_cols)})
         x_val = pd.DataFrame({x: np.random.rand(n_rows) for x in range(n_cols)})
         y_train = gen_target_col(x_train)
         y_val = gen_target_col(x_val)
+
+        x_train.columns = ['F' + str(x) for x in x_train.columns]
+        x_val.columns = ['F' + str(x) for x in x_val.columns]
 
         return x_train, y_train, x_val, y_val
 
@@ -557,13 +717,13 @@ if __name__ == "__main__":
     model = DecisionTreeClassifier()
 
     # test_all_features(model, x_train, y_train, x_val, y_val, metric=f1_score, average='macro')
-    # feature_selection_filter(model, x_train, y_train, x_val, y_val, draw_plots=True, metric=f1_score, average='macro')
+    feature_selection_filter(model, x_train, y_train, x_val, y_val, draw_plots=True, metric=f1_score, average='macro')
     # feature_selection_pairs(model, x_train, y_train, x_val, y_val, draw_plots=True, metric=f1_score, average='macro')
     # feature_selection_forward_wrapper(model, x_train, y_train, x_val, y_val, draw_plots=True, metric=f1_score, average='macro')
     # feature_selection_embedded(model, x_train, y_train, x_val, y_val, draw_plots=True, metric=f1_score, average='macro')
-    # feature_selection_SHAP(model, x_train, y_train, x_val, y_val, draw_plots=True, metric=f1_score, average='macro')
-    # feature_selection_Permutation(model, x_train, y_train, x_val, y_val, draw_plots=True, metric=f1_score, average='macro')
-    # feature_selection_Boruta(model, x_train, y_train, x_val, y_val, draw_plots=True, metric=f1_score, average='macro')
+    _ = feature_selection_SHAP(model, x_train, y_train, x_val, y_val, num_candidates=10, max_features=8, draw_plots=True, metric=f1_score, average='macro')
+    # feature_selection_permutation(model, x_train, y_train, x_val, y_val, draw_plots=True, metric=f1_score, average='macro')
+    # feature_selection_boruta(model, x_train, y_train, x_val, y_val, draw_plots=True, metric=f1_score, average='macro')
     # feature_selection_genetic(model, x_train, y_train, x_val, y_val, num_iterations=10, num_feats_selected=5,
     #                           draw_plots=True, metric=f1_score, average='macro')
     # feature_selection_genetic_range(model, x_train, y_train, x_val, y_val, num_iterations=10, num_feats_range=(2, 12),
