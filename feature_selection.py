@@ -48,7 +48,7 @@ def __plot_bootstraps(model_in, x_train, y_train, x_val, y_val, sorted_col_names
 
     print()
     msg1 = "Lineplots indicating model improvement with increased numbers of features:"
-    msg2 = (("For each number of features tested, bootstrap samples were used to help estimate the stability of the "
+    msg2 = (("For each number of features tested, bootstrap samples were used to help estimate the uncertainty of the "
              "model given that number of features."))
     if is_notebook():
         display(Markdown(f'**{msg1}**'))
@@ -264,12 +264,14 @@ def feature_selection_embedded(model_in, x_train, y_train, x_val, y_val, draw_pl
 
     x_train.columns = [str(x) for x in x_train.columns]
 
+    print("Calculating SHAP values:")
     model = clone(model_in)
     model.fit(x_train, y_train)
     explainer = shap.TreeExplainer(model, x_train)
     shap_values = explainer(x_train)
 
     shap_df = pd.DataFrame(shap_values.values)
+    shap_df.columns = x_train.columns
     shap_df = shap_df.abs()
 
     res_df = pd.DataFrame({"Feature Name": shap_df.mean().index, "Importance": shap_df.mean()})
@@ -529,11 +531,12 @@ def feature_selection_boruta(model_in, x_train, y_train, x_val, y_val, draw_plot
 
         sns.barplot(orient='h', y=res_df['Feature'], x=res_df['Hit %'], hue=res_df['Is Shadow'])
         plt.title(("Percent of times each features is above the cutoff to estimate some \npredictive power over 20 "
-                   "iterations \nfor all actual and shadow features"))
+                   "iterations.\nShowing for all actual and shadow features."))
         plt.show()
 
         res_df = res_df.sort_values(['Hit %'], ascending=False)
         sorted_col_names = res_df['Feature']
+        sorted_col_names = [x for x in sorted_col_names if x in x_train.columns]
         __plot_bootstraps(model_in, x_train_boruta, y_train, x_val_boruta, y_val, sorted_col_names, metric, **kwargs)
 
     return res_df
@@ -589,7 +592,8 @@ def feature_selection_genetic(model_in, x_train, y_train, x_val, y_val, num_iter
 
     # Create the initial population and evaluate each. Ensure we do not have duplicates
     scores_dict = {}
-    for _ in range(20):
+    print("Creating the initial set of candidates:")
+    for _ in tqdm(range(20)):
         candidate = [0]*num_feats
         selected_feats = np.random.choice(range(0, num_feats), num_feats_selected, replace=False)
         for i in selected_feats:
@@ -600,7 +604,8 @@ def feature_selection_genetic(model_in, x_train, y_train, x_val, y_val, num_iter
         scores_dict[candidate] = evaluate_candidate(candidate)
 
     best_scores_hist = []
-    for iteration_idx in range(num_iterations):
+    print(f"Iterating to combine and mutate the current population:")
+    for iteration_idx in tqdm(range(num_iterations)):
         # Select the top 5 candidates so far. Sort the scores_dict by the scores and take the tuples representing the
         # best candidates to date.
         population = [x[0] for x in sorted(list(zip(scores_dict.keys(), scores_dict.values())),
@@ -717,11 +722,11 @@ if __name__ == "__main__":
     model = DecisionTreeClassifier()
 
     # test_all_features(model, x_train, y_train, x_val, y_val, metric=f1_score, average='macro')
-    feature_selection_filter(model, x_train, y_train, x_val, y_val, draw_plots=True, metric=f1_score, average='macro')
+    # feature_selection_filter(model, x_train, y_train, x_val, y_val, draw_plots=True, metric=f1_score, average='macro')
     # feature_selection_pairs(model, x_train, y_train, x_val, y_val, draw_plots=True, metric=f1_score, average='macro')
     # feature_selection_forward_wrapper(model, x_train, y_train, x_val, y_val, draw_plots=True, metric=f1_score, average='macro')
-    # feature_selection_embedded(model, x_train, y_train, x_val, y_val, draw_plots=True, metric=f1_score, average='macro')
-    _ = feature_selection_SHAP(model, x_train, y_train, x_val, y_val, num_candidates=10, max_features=8, draw_plots=True, metric=f1_score, average='macro')
+    feature_selection_embedded(model, x_train, y_train, x_val, y_val, draw_plots=True, metric=f1_score, average='macro')
+    # _ = feature_selection_SHAP(model, x_train, y_train, x_val, y_val, num_candidates=10, max_features=8, draw_plots=True, metric=f1_score, average='macro')
     # feature_selection_permutation(model, x_train, y_train, x_val, y_val, draw_plots=True, metric=f1_score, average='macro')
     # feature_selection_boruta(model, x_train, y_train, x_val, y_val, draw_plots=True, metric=f1_score, average='macro')
     # feature_selection_genetic(model, x_train, y_train, x_val, y_val, num_iterations=10, num_feats_selected=5,
