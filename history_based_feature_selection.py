@@ -266,7 +266,10 @@ def feature_selection_history(model_in, model_args, x_train, y_train, x_val, y_v
         print("\nThe best-performing feature subsets found in terms of accuracy (showing at most 10) are:")
         if penalty == 0:
             scores_df = scores_df.drop(columns=['Score with Penalty'])
-        display(scores_df.head(10))
+        if is_notebook():
+            display(scores_df.head(10))
+        else:
+            print(scores_df.head(10))
         print("The full set of features is:")
         for col_idx, col_name in enumerate(x_train.columns):
             print(f"{col_idx:>4}: {col_name}")
@@ -291,7 +294,7 @@ def feature_selection_history(model_in, model_args, x_train, y_train, x_val, y_v
         s = sns.lineplot(data=scores_df, x='Num Features', y='Score', estimator='max', ax=ax[0][1])
         s.set_title("Scores by Number of Features over all candidates evaluated\n(highlighting the maximums)")
         s.set_xticks(list(range(scores_df['Num Features'].min(), scores_df['Num Features'].max()+1)))
-        clean_x_tick_labels(fig, 4, ax[0][1])
+        clean_x_tick_labels(ax[0][1])
 
         display_df = estimated_scores_df.copy()
         num_features = len(x_train.columns)
@@ -336,3 +339,19 @@ def clean_x_tick_labels(ax):
         for label_idx, label in enumerate(ax.xaxis.get_ticklabels()):
             if label_idx % mod != 0:
                 label.set_visible(False)
+
+
+def is_notebook():
+    """
+    Determine if we are currently operating in a notebook, such as Jupyter. Returns True if so, False otherwise.
+    """
+    try:
+        shell = get_ipython().__class__.__name__
+        if shell == 'ZMQInteractiveShell':
+            return True   # Jupyter notebook or qtconsole
+        elif shell == 'TerminalInteractiveShell':
+            return False  # Terminal running IPython
+        else:
+            return False  # Other type
+    except NameError:
+        return False      # Probably standard Python interpreter
