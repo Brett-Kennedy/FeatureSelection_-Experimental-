@@ -22,12 +22,6 @@ def generate_data(n_rows, n_cols, num_relevant_cols, frac_pos, target_type):
         for col_idx, col_name in enumerate(df.columns[:num_relevant_cols]):
             sum = sum + ((len(df.columns) - col_idx) * df[col_name])
         ret = [x < np.quantile(sum, frac_pos) for x in sum]
-
-        # # Add random noise
-        # modified_idxs = np.random.choice(range(n_rows), n_rows//20)
-        # for i in modified_idxs:
-        #     ret[i] = False if ret[i] else True
-
         return ret
 
     def gen_target_col2(df):
