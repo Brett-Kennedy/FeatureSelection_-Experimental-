@@ -6,7 +6,9 @@ HBFS is a feature selection tool. Similar to wrapper methods, genetic methods, a
 
 This is different than methods such as filter methods, which seek instead to evaluate and rank each feature with respect to their predictive power.
 
-# Algorithm
+## Example
+
+## Algorithm
 
 ```
 Loop a specfied number of times (by default, 20)
@@ -34,13 +36,11 @@ Loop a specified number of times (by default, 10)
 |   |   Record this set of features and their evaluated score
 ```
 
-# Example
+## API
 
-# API
-
-# Installation
+## Installation
 
 The tool uses a single .py file, which may be simply downloaded and used. It has no dependencies other than numpy, pandas, matplotlib, and seaborn.
 
-# Testing Results
+## Testing Results
 
