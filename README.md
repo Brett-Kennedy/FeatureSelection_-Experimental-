@@ -192,7 +192,9 @@ feature_selection_history() is the main method provided by this tool. Given a mo
         able to work.
     
     metric: metric used to evaluate the validation set.
-        This can be any metric supported by scikit-learn.
+        This can be any metric supported by scikit-learn.This uses MCC by default, which is a less-commonly used, but
+        effective metric for classification. It has the advantage of simplicity in that it balances FP, FN, TP and TN, 
+        and in that requires no parameters. 
     
     metric_args: arguments used for the evaluation metric.
         For example, with F1_score, this may include the averaging method.
