@@ -203,8 +203,12 @@ feature_selection_history() is the main method provided by this tool. Given a mo
         Set True for metrics where higher scores are better, such as MCC, F1, R2, etc. Set False for metrics where
         lower scores are better, such as MAE, MSE, etc.
 
+    previous_results: dataframe
+        The dataframe returned by a previous execution. Passing this allows us to continue searching for a stronger
+        set of features for more iterations.        
+
     Returns: dataframe listing each feature set tested, the number of features, and the score on the validation set. If 
-        a penalty was provided, this also returns, for each feature set tested, the score with penalty. 
+        a penalty was provided, this also returns, for each feature set tested, the score with penalty.         
 
 ## Installation
 
