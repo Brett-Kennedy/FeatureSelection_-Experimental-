@@ -103,10 +103,106 @@ Loop a specified number of times (by default, 10)
 
 The tool provides two methods: test_all_features() and feature_selection_history(). 
 
+### test_all_features
+
 The test_all_features() method simply tests training and evaluating the model using all features. This is a smoke test to ensure
 the specified model can work with the passed data (it has been properly pre-processed and so on). It also provides a score using the specified metric, which establishes a baseline we attempt to beat by calling feature_selection_history() and finding a subset of features. 
 
+**test_all_features**(model_in, model_args, x_train, y_train, x_val, y_val, metric, metric_args)
+  
+    model_in: The model to be used, and for which we wish to find the optimal set of features.        
+        This should have the hyper-parameters set, but should not be fit.
+        
+    model_args: dictionary of parameters to be passed to the fit() method.    
+        For example, with CatBoost models, this may specify the categorical features.
+    
+    x_train: pandas dataframe of training data.     
+        This includes the full set of features, of which we wish to identify a subset.
+    
+    y_train: array. 
+        Must be the same length as x_train.
+    
+    x_val: pandas dataframe. 
+        Equivalent dataframe as x_train, but for validation purposes.
+    
+    y_val: list or series
+    
+    metric: metric used to evaluate the validation set
+    
+    metric_args: arguments used for the evaluation metric.     
+        For example, with F1_score, this may include the averaging methods.
+
+    Returns: float
+        The score for the specified metric
+
+### feature_selection_history 
 feature_selection_history() is the main method provided by this tool. Given a model, dataset, target column, and metric, it seeks to find the set of features that maximizes the specified feature. 
+
+    model_in: model
+        The model to be used, and for which we wish to find the optimal set of features.
+        This should have the hyper-parameters set, but should not be fit.
+        
+    model_args: dictionary of parameters to be passed to the fit() method.
+        For example, with CatBoost models, this may specify the categorical features.
+    
+    x_train: pandas dataframe of training data.
+        This includes the full set of features, of which we wish to identify a subset.
+    
+    y_train: array
+        Must be the same length as x_train.
+    
+    x_val: pandas dataframe
+        Equivalent dataframe as x_train, but for validation purposes.
+    
+    y_val: list or series
+        Must be the same length as x_val.
+    
+    num_iterations: int
+        The number of times the process will iterate. Each iteration it retrains a Random Forest regressor that
+        estimates the score using a given set of features, generates num_estimates_per_iteration random candidates,
+        estimates their scores, and evaluates num_trials_per_iteration of these.
+    
+    num_estimates_per_iteration: int
+        The number of random candidates generated and estimated using the Random Forest regressor.
+    
+    num_trials_per_iteration:
+        The number of candidate feature sets that are evaluated each iteration. Each requires training a model and
+        evaluating on the validation data.
+    
+    max_features: int
+        The maximum number of features for any candidate subset of features considered. Set to None for no maximum.
+    
+    penalty: float
+        The amount the score must improve for each feature added for two candidates to be considered equivalent, and
+        so have the same scores with penalty. Set to None for no penalty. This allows the tool to evaluate and report
+        candidates with any number of features, but favour those with fewer, favauring them to the degree specified by
+        the penalty.
+    
+    verbose: bool
+        If set True, some output will be displayed during the process of discovering the top-performing feature sets.
+    
+    draw_plots: bool
+        If set True, plots will be displayed describing the process of finding the best features.
+    
+    plot_evaluation: bool
+        If set True and draw_plots is also set True, an additional plot will be included in the display, which indicates
+        how well the RandomForest regressor is able to predict the scores for candidate sets of features. In order to
+        display this, it's necessary to evaluate more candidates, including many that are estimated to be weak, so
+        setting this true will increase execution time, but does provide some insight into how well the process is
+        able to work.
+    
+    metric: metric used to evaluate the validation set.
+        This can be any metric supported by scikit-learn.
+    
+    metric_args: arguments used for the evaluation metric.
+        For example, with F1_score, this may include the averaging method.
+    
+    higher_is_better: bool
+        Set True for metrics where higher scores are better, such as MCC, F1, R2, etc. Set False for metrics where
+        lower scores are better, such as MAE, MSE, etc.
+
+    Returns: dataframe listing each feature set tested, the number of features, and the score on the validation set. If 
+        a penalty was provided, this also returns, for each feature set tested, the score with penalty. 
 
 ## Installation
 
