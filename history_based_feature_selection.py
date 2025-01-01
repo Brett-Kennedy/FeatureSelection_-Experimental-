@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from sklearn.base import clone
-from sklearn.metrics import matthews_corrcoef, r2_score
+from sklearn.metrics import matthews_corrcoef
 from sklearn.ensemble import RandomForestRegressor
 from IPython import get_ipython
 from IPython.display import display
@@ -15,10 +15,10 @@ def test_all_features(model_in, model_args, x_train, y_train, x_val, y_val, metr
     which creates a simple baseline to compare against.
 
     Params
-    model_in: The model to be used, and for which we wish to find the optimal set of features. This should have
-        the hyper-parameters set, but should not be fit.
-    model_args: dictionary of parameters to be passed to the fit() method. For example, with CatBoost models, this may
-        specify the categorical features.
+    model_in: The model to be used, and for which we wish to find the optimal set of features.
+        This should have the hyper-parameters set, but should not be fit.
+    model_args: dictionary of parameters to be passed to the fit() method.
+        For example, with CatBoost models, this may specify the categorical features.
     x_train: pandas dataframe of training data. This includes the full set of features, of which we wish to
         identify a subset.
     y_train: array. Must be the same length as x_train.
@@ -27,6 +27,9 @@ def test_all_features(model_in, model_args, x_train, y_train, x_val, y_val, metr
     metric: metric used to evaluate the validation set
     metric_args: arguments used for the evaluation metric. For example, with F1_score, this may include the averaging
         methods.
+
+    Returns: float
+        The score for the specified metric
     """
 
     if len(x_train.columns) == 0:
@@ -44,21 +47,24 @@ def test_all_features(model_in, model_args, x_train, y_train, x_val, y_val, metr
     return score_val
 
 
-def feature_selection_history(model_in, model_args, x_train, y_train, x_val, y_val,
+def feature_selection_history(model_in, model_args,
+                              x_train, y_train, x_val, y_val,
                               num_iterations=10, num_estimates_per_iteration=1000, num_trials_per_iteration=20,
-                              max_features=None, penalty=None, verbose=True, draw_plots=True, plot_evaluation=False,
-                              metric=matthews_corrcoef, metric_args={}):
+                              max_features=None, penalty=None,
+                              verbose=True, draw_plots=True, plot_evaluation=False,
+                              metric=matthews_corrcoef, metric_args={}, higher_is_better=True,
+                              previous_results=None):
     """
     model_in: model
-        The model to be used, and for which we wish to find the optimal set of features. This should have the
-        hyper-parameters set, but should not be fit.
+        The model to be used, and for which we wish to find the optimal set of features.
+        This should have the hyper-parameters set, but should not be fit.
     model_args: dictionary of parameters to be passed to the fit() method.
         For example, with CatBoost models, this may specify the categorical features.
     x_train: pandas dataframe of training data.
         This includes the full set of features, of which we wish to identify a subset.
-    y_train: array.
+    y_train: array
         Must be the same length as x_train.
-    x_val: pandas dataframe.
+    x_val: pandas dataframe
         Equivalent dataframe as x_train, but for validation purposes.
     y_val: list or series
         Must be the same length as x_val.
@@ -69,10 +75,12 @@ def feature_selection_history(model_in, model_args, x_train, y_train, x_val, y_v
     num_estimates_per_iteration: int
         The number of random candidates generated and estimated using the Random Forest regressor.
     num_trials_per_iteration:
+        The number of candidate feature sets that are evaluated each iteration. Each requires training a model and
+        evaluating on the validation data.
     max_features: int
         The maximum number of features for any candidate subset of features considered. Set to None for no maximum.
     penalty: float
-        The amount the score must improve for each feature added for two candidates to be considered equiavlent, and
+        The amount the score must improve for each feature added for two candidates to be considered equivalent, and
         so have the same scores with penalty. Set to None for no penalty. This allows the tool to evaluate and report
         candidates with any number of features, but favour those with fewer, favauring them to the degree specified by
         the penalty.
@@ -87,9 +95,17 @@ def feature_selection_history(model_in, model_args, x_train, y_train, x_val, y_v
         setting this true will increase execution time, but does provide some insight into how well the process is
         able to work.
     metric: metric used to evaluate the validation set.
-        This can be any metric supported by scikit-learn.
+        This can be any metric supported by scikit-learn.This uses MCC by default, which is a less-commonly used, but
+        effective metric for classification. It has the advantage of simplicity in that it balances FP, FN, TP and TN,
+        and in that requires no parameters.
     metric_args: arguments used for the evaluation metric.
         For example, with F1_score, this may include the averaging method.
+    higher_is_better: bool
+        Set True for metrics where higher scores are better, such as MCC, F1, R2, etc. Set False for metrics where
+        lower scores are better, such as MAE, MSE, etc.
+    previous_results: dataframe
+        The dataframe returned by a previous execution. Passing this allows us to continue searching for a stronger
+        set of features for more iterations.
     """
 
     def evaluate_candidate(candidate):
@@ -107,7 +123,7 @@ def feature_selection_history(model_in, model_args, x_train, y_train, x_val, y_v
         scores_arr = [d[x] for x in d.keys()]
         return df, scores_arr
 
-    def bin_num_features(num_feats_series):
+    def bin_num_features():
         interval_size = round(num_features/10)
         num_intervals = int(num_features / interval_size)
         bins = [x*interval_size for x in range(num_intervals+1)]
@@ -119,6 +135,15 @@ def feature_selection_history(model_in, model_args, x_train, y_train, x_val, y_v
 
     # scores_dict records the score of every candidate evaluated.
     scores_dict = {}
+    if previous_results is not None:
+        features_list = list(previous_results.columns)
+        features_list.remove('Num Features')
+        features_list.remove('Score')
+        if 'Score with Penalty' in previous_results.columns:
+            features_list.remove('Score with Penalty')
+        scores_dict = {tuple(previous_results.iloc[x][features_list].replace('Y', 1).replace('-', 0)):
+                           previous_results.iloc[x]['Score']
+                       for x in range(len(previous_results))}
 
     # Set parameter values if passed as None
     if max_features is None:
@@ -136,10 +161,6 @@ def feature_selection_history(model_in, model_args, x_train, y_train, x_val, y_v
             # Every 3rd row, set the features to be the columns that are under-represented so far
             for j in range(len(x_train.columns)):
                 if count_per_feature[j] < np.median(count_per_feature):
-                    candidate[j] = 1
-                    count_per_feature[j] += 1
-            if sum(candidate) < (len(x_train.columns) / 2.0):
-                if count_per_feature[j] <= np.median(count_per_feature):
                     candidate[j] = 1
                     count_per_feature[j] += 1
         else:
@@ -195,7 +216,10 @@ def feature_selection_history(model_in, model_args, x_train, y_train, x_val, y_v
                 continue
             predicted_score = regr.predict([candidate])
             num_features = sum(candidate)
-            predicted_score_with_penalty = predicted_score - (num_features * penalty)
+            if higher_is_better:
+                predicted_score_with_penalty = predicted_score - (num_features * penalty)
+            else:
+                predicted_score_with_penalty = predicted_score + (num_features * penalty)
             estimated_scores_dict[dict_key] = [predicted_score, predicted_score_with_penalty]
 
         # Find the top candidates based on the estimates of the RF
@@ -206,15 +230,15 @@ def feature_selection_history(model_in, model_args, x_train, y_train, x_val, y_v
         estimated_scores_df['Num Features'] = estimated_scores_df.sum(axis=1)
         estimated_scores_df['Score'] = np.array(scores).flatten()
         estimated_scores_df['Score with Penalty'] = np.array(scores_with_penalties).flatten()
-        estimated_scores_df = estimated_scores_df.sort_values('Score with Penalty', ascending=False)
+        estimated_scores_df = estimated_scores_df.sort_values('Score with Penalty', ascending=not higher_is_better)
 
         # Evaluate the actual scores of the top candidates
         for i in range(min(len(estimated_scores_df), num_trials_per_iteration)):
             candidate = estimated_scores_df.drop(columns=['Num Features', 'Score', 'Score with Penalty']).iloc[i]
-            estimated_score = estimated_scores_df.iloc[i]['Score']
             dict_key = tuple(candidate)
             if dict_key in scores_dict:
                 continue
+            estimated_score = estimated_scores_df.iloc[i]['Score']
             score = evaluate_candidate(candidate)
             scores_dict[dict_key] = score
             progress_arr.append([iteration_num, score])
@@ -237,20 +261,29 @@ def feature_selection_history(model_in, model_args, x_train, y_train, x_val, y_v
                 score = evaluate_candidate(candidate)
                 estimated_vs_actual_scores_arr.append([estimated_score, score])
 
-        print((f"Iteration number: {iteration_num:>3}, Number of candidates evaluated: {len(scores_dict):>4}, Mean Score: "
-               f"{np.mean(list(scores_dict.values())):.4f}, Max Score: {np.max(list(scores_dict.values())):.4f}"))
+        if higher_is_better:
+            print((f"Iteration number: {iteration_num:>3}, Number of candidates evaluated: {len(scores_dict):>4}, "
+                   f"Mean Score: {np.mean(list(scores_dict.values())):.4f}, "
+                   f"Max Score: {np.max(list(scores_dict.values())):.4f}"))
+        else:
+            print((f"Iteration number: {iteration_num:>3}, Number of candidates evaluated: {len(scores_dict):>4}, "
+                   f"Mean Score: {np.mean(list(scores_dict.values())):.4f}, "
+                   f"Min Score: {np.min(list(scores_dict.values())):.4f}"))
 
     scores_df, scores = create_df_from_scores_dict(scores_dict)
     scores_cols = scores_df.columns
     scores_df['Num Features'] = scores_df[scores_cols].sum(axis=1)
     scores_df['Score'] = scores
-    scores_df['Score with Penalty'] = scores_df['Score'] - (penalty * scores_df['Num Features'])
+    if higher_is_better:
+        scores_df['Score with Penalty'] = scores_df['Score'] - (penalty * scores_df['Num Features'])
+    else:
+        scores_df['Score with Penalty'] = scores_df['Score'] + (penalty * scores_df['Num Features'])
     for col_name in scores_cols:
         scores_df[col_name] = scores_df[col_name].replace(0, '-').replace(1, 'Y')
     scores_df = scores_df[scores_df['Num Features'] <= max_features]
 
     # Sort the values. If there is no penalty, sorting by Score with Penalty is equivalent to sorting by Score.
-    scores_df = scores_df.sort_values('Score with Penalty', ascending=False)
+    scores_df = scores_df.sort_values('Score with Penalty', ascending=not higher_is_better)
 
     # Indicate the list of top features
     penalty_str = ""
@@ -287,19 +320,27 @@ def feature_selection_history(model_in, model_args, x_train, y_train, x_val, y_v
 
         progress_df = pd.DataFrame(progress_arr, columns=['Iteration Number', 'Score'])
         if not progress_df.empty:
-            s = sns.lineplot(data=progress_df, x='Iteration Number', y='Score', estimator='max', ax=ax[0][0])
-            s.set_title("Scores for new candidates evaluated by iteration \n(highlighting the maximums)")
+            if higher_is_better:
+                s = sns.lineplot(data=progress_df, x='Iteration Number', y='Score', estimator='max', ax=ax[0][0])
+                s.set_title("Scores for new candidates evaluated by iteration \n(highlighting the maximums)")
+            else:
+                s = sns.lineplot(data=progress_df, x='Iteration Number', y='Score', estimator='min', ax=ax[0][0])
+                s.set_title("Scores for new candidates evaluated by iteration \n(highlighting the minimums)")
             s.set_xticks(list(range(progress_df['Iteration Number'].min(), progress_df['Iteration Number'].max()+1)))
 
-        s = sns.lineplot(data=scores_df, x='Num Features', y='Score', estimator='max', ax=ax[0][1])
-        s.set_title("Scores by Number of Features over all candidates evaluated\n(highlighting the maximums)")
+        if higher_is_better:
+            s = sns.lineplot(data=scores_df, x='Num Features', y='Score', estimator='max', ax=ax[0][1])
+            s.set_title("Scores by Number of Features over all candidates evaluated\n(highlighting the maximums)")
+        else:
+            s = sns.lineplot(data=scores_df, x='Num Features', y='Score', estimator='min', ax=ax[0][1])
+            s.set_title("Scores by Number of Features over all candidates evaluated\n(highlighting the minimums)")
         s.set_xticks(list(range(scores_df['Num Features'].min(), scores_df['Num Features'].max()+1)))
         clean_x_tick_labels(ax[0][1])
 
         display_df = estimated_scores_df.copy()
         num_features = len(x_train.columns)
         if num_features > 50:
-            display_df['Num Features'] = bin_num_features(display_df['Num Features'])
+            display_df['Num Features'] = bin_num_features()
         s = sns.boxplot(data=display_df, x='Num Features', y='Score', ax=ax[1][0])
         if num_features > 50:
             for label in ax[1][0].get_xmajorticklabels():
@@ -309,7 +350,7 @@ def feature_selection_history(model_in, model_args, x_train, y_train, x_val, y_v
 
         display_df = scores_df.copy()
         if num_features > 50:
-            display_df['Num Features'] = bin_num_features(display_df['Num Features'])
+            display_df['Num Features'] = bin_num_features()
         s = sns.boxplot(data=display_df, x='Num Features', y='Score', ax=ax[1][1])
         if num_features > 50:
             for label in ax[1][1].get_xmajorticklabels():
