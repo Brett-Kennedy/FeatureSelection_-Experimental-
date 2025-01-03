@@ -73,6 +73,7 @@ The set of features in the top-scored feature set
   17, num_dependents
   19, foreign_worker
 ```
+This indicates that 10 iterations were executed (as specified) and that the maximum score progressed from 0.6857 on the first iteration (for the top-scoring feature set discovered by that point) to 0.7061 by the last iteration. We can also see the mean scores of the candidates that are evaluated steadily improving, indicating the process is able to learn at each step, and identify candidate feature sets that do, in fact, tend to perform better than previous iterations. 
 
 ## Example for regression
 
