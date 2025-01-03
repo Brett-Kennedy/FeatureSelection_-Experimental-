@@ -7,7 +7,7 @@ HBFS is a feature selection tool. Similar to wrapper methods, genetic methods, a
 This is different than methods such as filter methods, which seek instead to evaluate and rank each feature with respect to their predictive power.
 
 ## Example
-An example notebook is provides, which provides a few examples performing feature selection using HBFS. The following is a portion of the notebook. 
+An [example notebook](https://github.com/Brett-Kennedy/HistoryBasedFeatureSelection/blob/main/Demo/Demo_History_Feature_Selection.ipynb) is provided, which provides a few examples performing feature selection using HBFS. The following is a portion of the notebook. 
 
 ```python
 import pandas as pd
@@ -17,18 +17,29 @@ from sklearn.datasets import fetch_openml
 from sklearn.metrics import f1_score
 from history_based_feature_selection import test_all_features, feature_selection_history
 
-# Divide into train and validate sets
+# Collect the data to be used.
+data = fetch_openml('credit-g', version=1, parser='auto')
+x = pd.DataFrame(data.data)
+y = data.target
+
+# Pre-process the data (skipped here, but inlcuded in the notebook.
+# This removes nulls and encodes categorical fields. 
+
+# Divide the data into train and validate sets
 n_samples = len(x) // 2
 x_train = pd.DataFrame(x[:n_samples])
 y_train = y[:n_samples]
 x_val = pd.DataFrame(x[n_samples:])
 y_val = y[n_samples:]
 
+# Execute feature_selection_history(). This returns 
 scores_df = feature_selection_history(
-        model_dt, {}, x_train, y_train, x_val, y_val,
+        model_dt, {},
+        x_train, y_train, x_val, y_val,
         num_iterations=10, num_estimates_per_iteration=5_000, num_trials_per_iteration=25, 
-        max_features=None, plot_evaluation=True, penalty=None, 
-        verbose=True, draw_plots=True, metric=f1_score, metric_args={'average':'macro'})
+        max_features=None, penalty=None, 
+        plot_evaluation=True, verbose=True, draw_plots=True,
+        metric=f1_score, metric_args={'average':'macro'})
 ```
 
 The output of the feature selection process (as verbose was set to True) includes:
