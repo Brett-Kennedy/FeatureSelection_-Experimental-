@@ -75,11 +75,75 @@ The set of features in the top-scored feature set
 ```
 This indicates that 10 iterations were executed (as specified) and that the maximum score progressed from 0.6857 on the first iteration (for the top-scoring feature set discovered by that point) to 0.7061 by the last iteration. We can also see the mean scores of the candidates that are evaluated steadily improving, indicating the process is able to learn at each step, and identify candidate feature sets that do, in fact, tend to perform better than previous iterations. 
 
-## Example for regression
+The final output also includes a summary of the feature sets evaluated, sorted by their performance: 
 
-HBFS can support binary and multiclass classification as well as regression. In this example, we use MAE as the metric, which is an example of a metric where lower is better (the previous example used f1_score, where higher is better).
+![plot1](https://github.com/Brett-Kennedy/HistoryBasedFeatureSelection/blob/main/images/output1.png)
+
+To evaluate how well the Random Forest that's used internally was able to estimate the scores for random features sets, we plot the estimated versus actual scores for all feature sets that were actually evaluated:
+
+![plot1](https://github.com/Brett-Kennedy/HistoryBasedFeatureSelection/blob/main/images/output2.png)
+
+In this case, the RandomForest was not perfect, but quite able to estimate the scores, and certainly able to distinguish strong from weak candidates. 
+
+We also provide some information about the progress (with respect to identifying stronger candidates over time, and related to the estimated and actual performance versus the number of features used. 
+
+![plot1](https://github.com/Brett-Kennedy/HistoryBasedFeatureSelection/blob/main/images/output3.png)
+
+The top-left plot shos the range of scores of the candidates evaluated each iteration. In this example, the maximum value is steadily increasing, which is most relevant. 
+
+The top-right plot shows the scores given by the number of features for the feature sets that were evaluated. The maximum score is the most relevant for each number of features.
+
+The bottom-left plot shows the range of estimated scores by the number of features. We see that, everything else equal, the Random Forest estimates higher scores when using more features, but that there is a large range for each number of features, and that other factors are taken into consideration.
+
+The bottom-right plot shows that range of actual scores by the number of features, similar to the plot above it. 
+
+## Example with a regression target, and demonstrating HBFS's ability to continue execution
+
+HBFS can support binary and multiclass classification as well as regression. In this example, we use MAE as the metric, which is an example of a metric where lower is better (the previous example used f1_score, where higher is better). For this, we the parameter higher_is_better to False. 
+
+This calls feature_selection_history() twice. The first time it executes for just 2 iterations. The results from this are passed as a parameter in the 2nd call, which is able to continue from that point, executing an additional 10 iterations. 
 
 ```python
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.metrics import mean_absolute_error
+from sklearn.datasets import make_regression
+import sys
+
+sys.path.insert(0, "..")
+from history_based_feature_selection import test_all_features, feature_selection_history
+
+model_dt = DecisionTreeRegressor()
+x, y, = make_regression(n_samples=10_000, n_features=20)
+
+# Divide into train and validate sets
+n_samples = len(x) // 2
+x_train = pd.DataFrame(x[:n_samples])
+y_train = y[:n_samples]
+x_val = pd.DataFrame(x[n_samples:])
+y_val = y[n_samples:]
+
+test_all_features(model_dt, {}, x_train, y_train, x_val, y_val, metric=mean_absolute_error, metric_args={})
+
+np.random.seed(0)
+
+scores_df = feature_selection_history(
+    model_dt, {},
+    x_train, y_train, x_val, y_val,
+    num_iterations=2, num_estimates_per_iteration=5_000, num_trials_per_iteration=25,
+    max_features=None, penalty=None,
+    verbose=True, draw_plots=True, plot_evaluation=True,
+    metric=mean_absolute_error, metric_args={}, higher_is_better=False)
+
+print("---------------------------------------------------------")
+scores_df = feature_selection_history(
+    model_dt, {},
+    x_train, y_train, x_val, y_val,
+    num_iterations=10, num_estimates_per_iteration=5_000, num_trials_per_iteration=25,
+    max_features=None, penalty=None,
+    verbose=True, draw_plots=True, plot_evaluation=True,
+    metric=mean_absolute_error, metric_args={}, higher_is_better=False,
+    previous_results=scores_df
+)
 ```
 
 
