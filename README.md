@@ -149,6 +149,7 @@ scores_df = feature_selection_history(
 
 ## Algorithm
 
+The algorihm, in psuedo-code is:
 ```
 Loop a specfied number of times (by default, 20)
 | Generate several random subsets of features, each covering about half 
@@ -174,6 +175,18 @@ Loop a specified number of times (by default, 10)
 |   |   Evaluate this model using the validation set
 |   |   Record this set of features and their evaluated score
 ```
+
+The algorithm starts by generating a set of random feature sets, each covering approximately half the features. So, if a dataset has, say 100 features, and the defaults are used, we'll generate 20 candidates, each with about 50 features. Each feature will then be included in about 10 of the candidates, and excluded in about 10 of the candidates, which provides some information about how predictive each feature is (for example, if models tend to perform better or worse with the feature).
+
+The algorithm then iterates for a specified number of iterations. Each iteration it begins by training a Random Forest regressor to predict, for any given set of features, the metric score that would be achieved by a model trained on those features and evaluated on a validation set. This is trained on all feature sets that have been evaluated so far.
+
+It then generates a large number of random feature sets and passes these through the Random Forest predictor, which estimates the scores that would be associated with each. It then selects the feature sets that are estimated to be the top-performing and evaluates these -- training a model (of the specified model type) on the provided training data and evaluating this on the provided validation data.
+
+This process is then repeated a specfied number of times. Generally, about 4 to 12 iterations are necessary to find an optimal, or near-optimal, feature set. 
+
+## Options
+
+It's possible to use HBFS to either simply search for the subset of features that result in the highest metric score, or to balance this with minimizing the number of features returned. To support the latter goals, it's possible to specifiy one or both of: a maximum number of features, and a penalty. If a penalty is specified, the tool may return any number of features (up to the maximum number if this is specified), but will favour feature sets with fewer features, and only return feature sets with more features if the increase in metric score warrants this. This is similar to Lasso regularization often used with linear regression, and to penalties for additional features used by AIC and BIC, though here the penalty can be specified to best suite the balance between accuracy and reduced features best matching your project. 
 
 ## API
 
