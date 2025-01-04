@@ -376,7 +376,7 @@ Looking at the fraction of the time that each feature selection method outperfor
 
 ![plot8](https://github.com/Brett-Kennedy/HistoryBasedFeatureSelection/blob/main/images/output8.png)
 
-HBFS did so about 65% of the time, while the other feature selection methods did so only about 20 or 25% of the time (more often performing worse than simply using all features).
+HBFS did so about 65% of the time, while the other feature selection methods did so only about 20 or 25% of the time (more often performing worse than simply using all features). Using only 1/4 of the features in particular, it was difficult to beat using all features, though using 1/2 or 3/4 of the original features tended to be more achievable. In any case, when comparing the four feature selection methods, each was set to identify the same maximum number of features, so comparisons among the four feature selection methods may be more fair than comparing to using all features. 
 
 Looking at the count of tests where each method was the top-performing feature selection method:
 
