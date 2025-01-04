@@ -4,7 +4,7 @@
 
 HBFS is a feature selection tool. Similar to wrapper methods, genetic methods, and some other approaches, HBFS seeks to find the optimal subset of features for a given dataset, target, and performance metric. 
 
-This is different than methods such as filter methods, which seek instead to evaluate and rank each feature with respect to their predictive power.
+This is different than methods such as filter methods, which seek, instead, to evaluate and rank each feature with respect to their predictive power.
 
 ## Example
 An [example notebook](https://github.com/Brett-Kennedy/HistoryBasedFeatureSelection/blob/main/Demo/Demo_History_Feature_Selection.ipynb) is provided, which provides a few examples performing feature selection using HBFS. The following is a portion of the notebook. 
@@ -22,7 +22,7 @@ data = fetch_openml('credit-g', version=1, parser='auto')
 x = pd.DataFrame(data.data)
 y = data.target
 
-# Pre-process the data (skipped here, but inlcuded in the notebook.
+# Pre-process the data (skipped here, but inlcuded in the notebook).
 # This removes nulls and encodes categorical fields. 
 
 # Divide the data into train and validate sets
@@ -32,7 +32,8 @@ y_train = y[:n_samples]
 x_val = pd.DataFrame(x[n_samples:])
 y_val = y[n_samples:]
 
-# Execute feature_selection_history(). This returns 
+# Execute feature_selection_history(). This returns a dataframe tha lists the feature
+# sets that were tested and their scores on the validation set. 
 scores_df = feature_selection_history(
         model_dt, {},
         x_train, y_train, x_val, y_val,
@@ -73,11 +74,14 @@ The set of features in the top-scored feature set
   17, num_dependents
   19, foreign_worker
 ```
-This indicates that 10 iterations were executed (as specified) and that the maximum score progressed from 0.6857 on the first iteration (for the top-scoring feature set discovered by that point) to 0.7061 by the last iteration. We can also see the mean scores of the candidates that are evaluated steadily improving, indicating the process is able to learn at each step, and identify candidate feature sets that do, in fact, tend to perform better than previous iterations. 
+This indicates that 10 iterations were executed (as specified) and that the maximum score progressed from 0.6857 on the first iteration (for the top-scoring feature set discovered by that point) to 0.7061 by the last iteration. We can also see the mean scores of the candidates that are evaluated steadily improving (from about 0.61 to about 0.65), indicating the process is able to learn at each step, and identify candidate feature sets that do, in fact, tend to perform better than previous iterations. 
 
 The final output also includes a summary of the feature sets evaluated, sorted by their performance: 
 
 ![plot1](https://github.com/Brett-Kennedy/HistoryBasedFeatureSelection/blob/main/images/output1.png)
+
+Interally, HBFS works by using a Random Forest regressor to estimate the metric score that would be given to any given set of features. HBFS selects the feature sets that are estimated to perform the best and evaluates these (training a model on the training data using these features, and evaluating it on the validation data). In this way, HBFS evaluates the feature sets most likely to perform well, but does this
+over several iterations, so that the Random Forest can become increasingly more skilled at estimating how well a given feature set would perform, based on the history of feature evaluated up until that iteration. 
 
 To evaluate how well the Random Forest that's used internally was able to estimate the scores for random features sets, we plot the estimated versus actual scores for all feature sets that were actually evaluated:
 
@@ -93,13 +97,13 @@ The top-left plot shos the range of scores of the candidates evaluated each iter
 
 The top-right plot shows the scores given by the number of features for the feature sets that were evaluated. The maximum score is the most relevant for each number of features.
 
-The bottom-left plot shows the range of estimated scores by the number of features. We see that, everything else equal, the Random Forest estimates higher scores when using more features, but that there is a large range for each number of features, and that other factors are taken into consideration.
+The bottom-left plot shows the range of estimated scores by the number of features. We see that, for this dataset, everything else equal, the Random Forest estimates higher scores when using more features, but that there is a large range for each number of features, and that other factors are taken into consideration.
 
 The bottom-right plot shows that range of actual scores by the number of features, similar to the plot above it. 
 
 ## Example with a regression target, and demonstrating HBFS's ability to continue execution
 
-HBFS can support binary and multiclass classification as well as regression. In this example, we use MAE as the metric, which is an example of a metric where lower is better (the previous example used f1_score, where higher is better). For this, we the parameter higher_is_better to False. 
+HBFS can support binary and multiclass classification, as well as regression. In this example, we have a regression target, and we use MAE as the metric, which is an example of a metric where lower is better (the previous example used f1_score, where higher is better). For this, we the parameter higher_is_better to False. 
 
 This calls feature_selection_history() twice. The first time it executes for just 2 iterations. The results from this are passed as a parameter in the 2nd call, which is able to continue from that point, executing an additional 10 iterations. 
 
@@ -107,9 +111,6 @@ This calls feature_selection_history() twice. The first time it executes for jus
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.metrics import mean_absolute_error
 from sklearn.datasets import make_regression
-import sys
-
-sys.path.insert(0, "..")
 from history_based_feature_selection import test_all_features, feature_selection_history
 
 model_dt = DecisionTreeRegressor()
@@ -145,7 +146,31 @@ scores_df = feature_selection_history(
     previous_results=scores_df
 )
 ```
+The output of this (edited slightly here for space) is:
 
+```
+Testing with all (20) features: train score: 0.0, validation score: 101.36362689302662
+
+Repeatedly generating random candidates, estimating their skill using a Random Forest, evaluating the most promising of these, and re-training the Random Forest...
+Iteration number:   0, Number of candidates evaluated:   50, Mean Score: 136.5973, Min Score: 97.0896
+Iteration number:   1, Number of candidates evaluated:   72, Mean Score: 125.3618, Min Score: 97.0896
+---------------------------------------------------------
+Repeatedly generating random candidates, estimating their skill using a Random Forest, evaluating the most promising of these, and re-training the Random Forest...
+Iteration number:   0, Number of candidates evaluated:  113, Mean Score: 133.1507, Min Score: 97.0743
+Iteration number:   1, Number of candidates evaluated:  131, Mean Score: 128.3860, Min Score: 96.1117
+Iteration number:   2, Number of candidates evaluated:  151, Mean Score: 124.3848, Min Score: 93.9759
+Iteration number:   3, Number of candidates evaluated:  171, Mean Score: 121.3966, Min Score: 93.9759
+Iteration number:   4, Number of candidates evaluated:  192, Mean Score: 118.8837, Min Score: 93.9759
+Iteration number:   5, Number of candidates evaluated:  205, Mean Score: 117.6166, Min Score: 93.9759
+Iteration number:   6, Number of candidates evaluated:  224, Mean Score: 115.9409, Min Score: 93.9759
+Iteration number:   7, Number of candidates evaluated:  245, Mean Score: 114.4119, Min Score: 93.9759
+Iteration number:   8, Number of candidates evaluated:  270, Mean Score: 112.9481, Min Score: 93.9759
+Iteration number:   9, Number of candidates evaluated:  295, Mean Score: 111.6582, Min Score: 93.9759
+
+```
+Here, using all 20 features, we are able to achieve a MAE of 101.36. Executing HBFS for two iterations, we find a better (lower error) score of 97.09. Executing for an additional 10 iterations we get a better-still socre of 93.98. 
+
+It's difficult to say how many iterations are necessary ahead of time (this depends on the original number of features, the difficulty in predicting the target from the features, the num_estimates_per_iteration, and num_trials_per_iteration parameters), but in this case, the minimum score did not improve for the last several iterations (even though the mean score was improving), so this is likely the optimal feature set in terms of MAE, or at least quite close. 
 
 ## Algorithm
 
@@ -176,17 +201,27 @@ Loop a specified number of times (by default, 10)
 |   |   Record this set of features and their evaluated score
 ```
 
-The algorithm starts by generating a set of random feature sets, each covering approximately half the features. So, if a dataset has, say 100 features, and the defaults are used, we'll generate 20 candidates, each with about 50 features. Each feature will then be included in about 10 of the candidates, and excluded in about 10 of the candidates, which provides some information about how predictive each feature is (for example, if models tend to perform better or worse with the feature).
+The algorithm starts by generating a collection of random feature sets, each covering approximately half the features. So, if a dataset has, say 100 features, and the defaults are used, we'll generate 20 candidates, each with about 50 features. Each feature will then be included in about 10 of the candidates, and excluded in about 10 of the candidates, which provides some information about how predictive each feature is (for example, if models tend to perform better, about the same, or worse with the feature -- though Random Forests can capture feature interactions as well).
 
 The algorithm then iterates for a specified number of iterations. Each iteration it begins by training a Random Forest regressor to predict, for any given set of features, the metric score that would be achieved by a model trained on those features and evaluated on a validation set. This is trained on all feature sets that have been evaluated so far.
 
-It then generates a large number of random feature sets and passes these through the Random Forest predictor, which estimates the scores that would be associated with each. It then selects the feature sets that are estimated to be the top-performing and evaluates these -- training a model (of the specified model type) on the provided training data and evaluating this on the provided validation data.
+It then generates a large number of random feature sets and passes these through the Random Forest predictor, which estimates the scores that would be associated with each. It then selects the feature sets that are estimated to be the top-performing and evaluates these. It then, for each of these top-estimated features sets (by default it takes 20 each iteration), trains a model (of the specified model type) on the provided training data and evaluates this on the provided validation data.
 
 This process is then repeated a specfied number of times. Generally, about 4 to 12 iterations are necessary to find an optimal, or near-optimal, feature set. 
 
 ## Options
 
-It's possible to use HBFS to either simply search for the subset of features that result in the highest metric score, or to balance this with minimizing the number of features returned. To support the latter goals, it's possible to specifiy one or both of: a maximum number of features, and a penalty. If a penalty is specified, the tool may return any number of features (up to the maximum number if this is specified), but will favour feature sets with fewer features, and only return feature sets with more features if the increase in metric score warrants this. This is similar to Lasso regularization often used with linear regression, and to penalties for additional features used by AIC and BIC, though here the penalty can be specified to best suite the balance between accuracy and reduced features best matching your project. 
+It's possible to use HBFS to either 1) simply search for the subset of features that result in the highest metric score; or 2) to balance this with minimizing the number of features returned. 
+
+Both scenarios are quite common when performing feature selection, but are actually distinct goals. Simply maximizing the accuracy is relatively straight-forward. Balancing the goals of maximizing accuracy with minimizing the number of features is more complex. 
+
+To support balancing these goals, it's possible to specifiy one or both of: a maximum number of features, and a penalty. 
+
+Specifying a maximum number of features ensures HBFS only evaluates (other than the first iteration), and only returns, feature sets with this many or fewer features. 
+
+If a penalty is specified, the tool may return any number of features (up to the maximum number if this is specified), but will favour feature sets with fewer features, and only return feature sets with more features if the increase in metric score warrants this. This is similar to Lasso regularization often used with linear regression, and to penalties for additional features used by AIC and BIC, though here specific penalty can be specified to best suite the balance between accuracy and reduced features best matching your project. 
+
+An example using a penalty is provided in the [example notebook](https://github.com/Brett-Kennedy/HistoryBasedFeatureSelection/blob/main/Demo/Demo_History_Feature_Selection.ipynb).
 
 ## API
 
@@ -219,7 +254,7 @@ the specified model can work with the passed data (it has been properly pre-proc
     metric: metric used to evaluate the validation set
     
     metric_args: arguments used for the evaluation metric.     
-        For example, with F1_score, this may include the averaging methods.
+        For example, with F1_score, this may include the averaging method.
 
     Returns: float
         The score for the specified metric
@@ -303,5 +338,88 @@ feature_selection_history() is the main method provided by this tool. Given a mo
 
 The tool uses a single .py file, which may be simply downloaded and used. It has no dependencies other than numpy, pandas, matplotlib, and seaborn.
 
-## Testing Results
+## Testing Results - Comparing to other feature selection methods
+
+A [test file](https://github.com/Brett-Kennedy/HistoryBasedFeatureSelection/blob/main/Tests/test_history_based_feature_selection.py) is included which provides some testing of HBFS. In the main code, there are 3 constants:
+
+```python
+    TEST_SYNTHETIC = False
+    TEST_REAL = False
+    TEST_REAL_ALL_COMBINATIONS = True
+```
+These may be used to control which tests are executed. However, the tests cover many test cases and take a long time to execute. The main test (enabled by setting TEST_REAL to True), covers 80 random datasets from OpenML, comparing HBFS to 
+
+- Using all features
+- A filter feature selection method
+- A model-based feature selection method
+- A wrapper feature selection method
+
+Tests were done both with a Decision Tree classifier and a CatBoost classifier, setting the maximum number of features to 1/4, 1/2, and 3/4 of the original number of features. 
+
+The complete results can be seen in the [results csv file](https://github.com/Brett-Kennedy/HistoryBasedFeatureSelection/blob/main/Tests/results_full.csv).
+
+A more thorough analysis of the results in provided in the Medium article. 
+
+Comparing the distribution of scores over all datasets, model types, and maximum numbers of features:
+
+![plot6](https://github.com/Brett-Kennedy/HistoryBasedFeatureSelection/blob/main/images/output6.png)
+
+This shows using all features and using HBFS tend to outperform the other feature selection methods in terms of the f1 macro score (the metric used in these tests).
+
+Treating using all features as the baseline that we try to beat, we next normalize the scores for each test by their ratio to the score given when using all features. Doing this, using all features consistently has a normalized score of 1.0; the other feature selection methods have normalized scores above 1.0 if they performed better, and a normalized score below 1.0 if they did worse.
+
+![plot7](https://github.com/Brett-Kennedy/HistoryBasedFeatureSelection/blob/main/images/output7.png)
+
+We can see that HBFS selection quite consistently outperformed using all features (though did not in 100% of cases), and that the other feature selection methods more often did worse. However, testing other features selection methods, or using these with different settings may have performed better. 
+
+Looking at the fraction of the time that each feature selection method outperformed using all features:
+
+![plot8](https://github.com/Brett-Kennedy/HistoryBasedFeatureSelection/blob/main/images/output8.png)
+
+HBFS did so about 65% of the time, while the other feature selection methods did so only about 20 or 25% of the time (more often performing worse than simply using all features).
+
+Looking at the count of tests where each method was the top-performing feature selection method:
+
+![plot9](https://github.com/Brett-Kennedy/HistoryBasedFeatureSelection/blob/main/images/output9.png)
+
+We see here that HBFS was the most, followed by using all features, of the 5 methods tested here. 
+
+
+## Testing Results - Comparing to an exhaustive search over all possible feature sets
+
+Ideally, to confirm that HBFS provides an optimal, or nearly optimal, set of features (given the maximum features and penalty specified), we would compare the feature set it identifies with every possible subset of features.
+
+If we have, say, 30 features, and HBFS returns a set of 8 features that result in an R2 score of 0.87 (let's assume this is a regression target, and that R2 is the most relevant metric), the only definitive way to determine how good of a solution this is is to test all possible subsets of the 30 features and determine if any did better than 0.87, and if any did significantly better. 
+
+Unfortunately, in practice this is infeasible. Where there are d features, there are 2**d possible subsets. With 10 features, this is only 1024, but with 20, this is over a million. With 30 features, this is over a billion, and with 100 features, it's a number with 31 digits. 
+
+So, for any cases where feature selection is most important (the more features there are, the more relevant feature selection is), this isn't possible. In these cases, it's necessary to either use HBFS or another feature selection method.
+
+We do, though, provide here a quick test using the diabetes dataset from OpenML, which has only 9 features, which means there are only 2⁹, or 256 possible feature sets. In this case, HBFS is able to identify the top-performing feature set within two iterations. 
+
+These results are informative (and testing with other datasets with reasonably few features has worked similarly), but shouldn't be taken to indicate the HBFS will do as well with datasets with many more features. In these cases, there are drastically more potential feature sets and it's unlikely any algorithm would identify the truly optimal set. It's also impossible to confirm if it did. 
+
+However, testing has indicated that HBFS tends to find a very strong feature set, likely as strong as with any other method, and does so quickly given the quality of response it's able to produce.
+The code for this experiment is also provided in the [test file](https://github.com/Brett-Kennedy/HistoryBasedFeatureSelection/blob/main/Tests/test_history_based_feature_selection.py) and is executed by setting TEST_REAL_ALL_COMBINATIONS to True. 
+
+In this experiment, we again use macro f1 score for the metric. For the model type, we used CatBoostClassifier, and so attempted to find the set of features that optimized the macro f1 score for a CatBoost classifier.
+
+We tested three cases:
+- Using all features
+- Using HBFS
+- An exhaustive search over all ²⁹ subsets of features.
+
+Using all features resulted in a score of 0.71. Using HBFS resulted in 0.76. Testing over all combinations confirmed that 0.76 was, in fact, the best possible score for this dataset.
+
+We should note though: with any dataset where an exhaustive search over all combination is possible, while HBFS does well in my testing to date, the difficulty is not great. Setting the number of iterations to 2 and number of trials per iteration to 25 will test a maximum of 50 combinations, which can be close to the full set of possible combinations (though in practice HBFS will actually evaluate far fewer). In this case, HBFS will test about 1/5 of the total possible combinations of features (there are 256 possible subsets). 
+
+In the example below, it's allowed to run for 10 iterations, though requires far fewer iterations in this case to identify the optimal feature set.
+Testing first with all features outputs:
+
+```
+Testing with all (8) features: train score: 0.976, validation score: 0.718
+```
+
+HBFS identifies a feature set with 3 features (plas, mass, and age), which achieves 0.76. 
+
 
