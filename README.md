@@ -422,4 +422,30 @@ Testing with all (8) features: train score: 0.976, validation score: 0.718
 
 HBFS identifies a feature set with 3 features (plas, mass, and age), which achieves 0.76. 
 
+The output indicates the top 10 candidates that were evaluated:
+
+```
+   0 1 2 3 4 5 6 7 Num Features, Score
+24 - Y - - - Y - Y     3         0.760027
+29 - Y - Y - Y - Y     4         0.759284
+25 - Y Y - Y Y - Y     5         0.749020
+34 - Y Y Y Y Y - Y     6         0.746032
+26 - Y Y - - Y Y Y     5         0.745394
+31 - Y - Y Y Y - Y     5         0.742253
+55 - Y - - Y - - Y     3         0.742090
+43 Y Y - Y - Y - Y     5         0.740759
+35 - Y Y Y - Y Y Y     6         0.738770
+51 - Y - - - - - Y     2         0.738746
+
+The full set of features is:
+ 0: preg
+ 1: plas
+ 2: pres
+ 3: skin
+ 4: insu
+ 5: mass
+ 6: pedi
+ 7: age
+```
+
 
