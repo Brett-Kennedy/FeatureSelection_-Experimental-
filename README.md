@@ -347,14 +347,14 @@ A [test file](https://github.com/Brett-Kennedy/HistoryBasedFeatureSelection/blob
     TEST_REAL = False
     TEST_REAL_ALL_COMBINATIONS = True
 ```
-These may be used to control which tests are executed. However, the tests cover many test cases and take a long time to execute. The main test (enabled by setting TEST_REAL to True), covers 80 random datasets from OpenML, comparing HBFS to 
+These may be used to control which tests are executed. However, the tests cover many test cases and take a very long time to execute. The main test (enabled by setting TEST_REAL to True), covers 80 random datasets from OpenML, comparing HBFS to: 
 
 - Using all features
 - A filter feature selection method
 - A model-based feature selection method
 - A wrapper feature selection method
 
-Tests were done both with a Decision Tree classifier and a CatBoost classifier, setting the maximum number of features to 1/4, 1/2, and 3/4 of the original number of features. 
+Tests were done both with a Decision Tree classifier and a CatBoost classifier, and setting the maximum number of features to 1/4, 1/2, and 3/4 of the original number of features. 
 
 The complete results can be seen in the [results csv file](https://github.com/Brett-Kennedy/HistoryBasedFeatureSelection/blob/main/Tests/results_full.csv).
 
