@@ -1,3 +1,5 @@
+import copy
+
 import pandas as pd
 import numpy as np
 from sklearn.base import clone
@@ -26,7 +28,7 @@ def test_all_features(model_in, model_args, x_train, y_train, x_val, y_val, metr
     y_val: list or series
     metric: metric used to evaluate the validation set
     metric_args: arguments used for the evaluation metric. For example, with F1_score, this may include the averaging
-        methods.
+        method.
 
     Returns: float
         The score for the specified metric
@@ -112,7 +114,13 @@ def feature_selection_history(model_in, model_args,
         col_names = [x_train.columns[x] for x in range(len(candidate)) if candidate[x] == 1]
         model = clone(model_in)
 
-        model.fit(x_train[col_names], y_train, **model_args)
+        # Handle where the fit parameters include the list of categorical columns, as some may not be included in the
+        # current candidate
+        cleaned_model_args = copy.deepcopy(model_args)
+        if 'cat_features' in model_args:
+            cleaned_model_args['cat_features'] = [x for x in model_args['cat_features'] if x in col_names]
+
+        model.fit(x_train[col_names], y_train, **cleaned_model_args)
         y_pred_val = model.predict(x_val[col_names])
         score = metric(y_val, y_pred_val, **metric_args)
         return score
