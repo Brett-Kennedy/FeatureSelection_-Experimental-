@@ -172,6 +172,19 @@ Here, using all 20 features, we are able to achieve a MAE of 101.36. Executing H
 
 It's difficult to say how many iterations are necessary ahead of time (this depends on the original number of features, the difficulty in predicting the target from the features, the num_estimates_per_iteration, and num_trials_per_iteration parameters), but in this case, the minimum score did not improve for the last several iterations (even though the mean score was improving), so this is likely the optimal feature set in terms of MAE, or at least quite close. 
 
+## Example using CatBoost, specifying the categorical columns
+
+```python
+scores_df = feature_selection_history(
+    model_dt, {'cat_features': ['A']}, x_train, y_train, x_val, y_val,
+    num_iterations=10, num_estimates_per_iteration=5_000, num_trials_per_iteration=25,
+    max_features=None, plot_evaluation=True, penalty=None,
+    verbose=True, draw_plots=True, metric=mean_absolute_error, metric_args={}, higher_is_better=False,
+    previous_results=scores_df
+)
+```
+The second parameter here is the 'model_args' parameter, which may be used to pass parameters to the fit method. In this example, CatBoost model can accept a list of categorical columns in either the constructor or the fit() method. The fit() method must be used in this case, as each time HBFS fits a model using a candidate set of features, this candidate set may have any subset of the categorical features. 
+
 ## Algorithm
 
 The algorihm, in psuedo-code is:
